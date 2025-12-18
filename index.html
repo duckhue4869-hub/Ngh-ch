@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hand Controlled Particles - Rotate & Scale</title>
+    <title>Hand Controlled Particles - Horizontal Rotation</title>
     <style>
       body {
         margin: 0;
@@ -117,9 +117,9 @@
       <h2>Điều khiển Hạt 3D</h2>
       <p>
         ↔️ <b>Khoảng cách:</b> Phóng to/nhỏ<br />
-        🔄 <b>Nghiêng tay:</b> Xoay khối cầu
+        🔄 <b>Nghiêng tay:</b> Xoay ngang (Trái/Phải)
       </p>
-      <div class="instruction">Hãy đưa cả 2 bàn tay lên camera</div>
+      <div class="instruction">Đưa 2 tay lên camera để bắt đầu</div>
       <div class="control-group">
         <span>Màu sắc:</span>
         <input type="color" id="colorPicker" value="#00ffff" />
@@ -132,7 +132,7 @@
     <script>
       // --- 1. SETUP THREE.JS ---
       const scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x050505, 0.002); // Sương mù đen cho nền tối
+      scene.fog = new THREE.FogExp2(0x050505, 0.002);
 
       const camera = new THREE.PerspectiveCamera(
         75,
@@ -147,24 +147,21 @@
         alpha: true,
       });
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Tối ưu hiệu năng
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       document.body.appendChild(renderer.domElement);
 
       // --- 2. TẠO HỆ THỐNG HẠT ---
-      const particleCount = 5000; // Tăng số lượng hạt lên một chút
+      const particleCount = 5000;
       const geometry = new THREE.BufferGeometry();
       const positions = [];
       const radius = 30;
 
-      // Tạo hình cầu Fibonacci
       for (let i = 0; i < particleCount; i++) {
         const phi = Math.acos(-1 + (2 * i) / particleCount);
         const theta = Math.sqrt(particleCount * Math.PI) * phi;
-
         const x = radius * Math.cos(theta) * Math.sin(phi);
         const y = radius * Math.sin(theta) * Math.sin(phi);
         const z = radius * Math.cos(phi);
-
         positions.push(x, y, z);
       }
 
@@ -188,8 +185,10 @@
       // --- 3. BIẾN LOGIC ---
       let targetScale = 1;
       let currentScale = 1;
-      let targetRotationZ = 0; // Góc xoay mục tiêu
-      let currentRotationZ = 0; // Góc xoay hiện tại (để làm mượt)
+
+      let targetRotationY = 0; // Đổi thành Y để xoay ngang
+      let currentRotationY = 0;
+
       let isHandDetected = false;
 
       // --- 4. XỬ LÝ MEDIAPIPE ---
@@ -204,47 +203,38 @@
         ) {
           isHandDetected = true;
 
-          // Lấy mảng landmark
           let landmarks = results.multiHandLandmarks;
-
-          // QUAN TRỌNG: Sắp xếp tay trái/phải dựa trên toạ độ X
-          // Tay trái (trên màn hình) sẽ có x nhỏ hơn tay phải
+          // Sắp xếp tay trái/phải theo trục X để tính toán chuẩn
           landmarks.sort((a, b) => a[8].x - b[8].x);
 
-          const leftHand = landmarks[0][8]; // Ngón trỏ tay trái (trên màn hình)
-          const rightHand = landmarks[1][8]; // Ngón trỏ tay phải (trên màn hình)
+          const leftHand = landmarks[0][8];
+          const rightHand = landmarks[1][8];
 
-          // --- XỬ LÝ SCALE (KHOẢNG CÁCH) ---
+          // --- XỬ LÝ SCALE ---
           const distance = Math.sqrt(
             Math.pow(leftHand.x - rightHand.x, 2) +
               Math.pow(leftHand.y - rightHand.y, 2)
           );
 
-          // Map khoảng cách sang scale
           const minScale = 0.5;
           const maxScale = 4.5;
           let normalizedDist = (distance - 0.1) / (0.6 - 0.1);
           normalizedDist = Math.max(0, Math.min(1, normalizedDist));
           targetScale = minScale + normalizedDist * (maxScale - minScale);
 
-          // --- XỬ LÝ ROTATION (GÓC NGHIÊNG) ---
-          // Tính vector chênh lệch giữa 2 tay
+          // --- XỬ LÝ ROTATION (MỚI: XOAY TRỤC Y) ---
           const dy = rightHand.y - leftHand.y;
           const dx = rightHand.x - leftHand.x;
 
-          // Math.atan2 trả về góc tính bằng radian
-          // Lưu ý: Hệ toạ độ màn hình Y hướng xuống, nên ta đảo dấu hoặc điều chỉnh tuỳ cảm giác
-          // Ở đây ta muốn: Tay phải cao hơn -> Xoay trái (ngược chiều kim đồng hồ)
+          // Tính góc nghiêng của tay
           const angle = Math.atan2(dy, dx);
 
-          // Gán góc mục tiêu (nhân thêm hệ số nếu muốn xoay gắt hơn)
-          // -angle để đồng bộ cảm giác xoay vô lăng
-          targetRotationZ = -angle;
+          // Gán vào trục Y thay vì trục Z
+          // Nhân thêm hệ số (2.5) để xoay nhanh hơn, cảm giác nhạy hơn
+          targetRotationY = angle * 2.5;
         } else {
           isHandDetected = false;
-          // Nếu không có tay, reset từ từ hoặc giữ nguyên
           targetScale = 1;
-          // targetRotationZ = 0; // Bỏ comment nếu muốn tự cân bằng lại khi bỏ tay ra
         }
       }
 
@@ -267,7 +257,6 @@
       });
       cameraUtils.start();
 
-      // --- UI ---
       document.getElementById("colorPicker").addEventListener("input", (e) => {
         material.color.set(e.target.value);
       });
@@ -277,25 +266,20 @@
         requestAnimationFrame(animate);
 
         if (isHandDetected) {
-          // Khi có tay:
-          // 1. Lerp Scale (làm mượt thu phóng)
+          // Làm mượt Scale
           currentScale += (targetScale - currentScale) * 0.1;
 
-          // 2. Lerp Rotation (làm mượt xoay)
-          // Công thức này giúp xoay mượt mà từ góc hiện tại sang góc mục tiêu
-          currentRotationZ += (targetRotationZ - currentRotationZ) * 0.1;
+          // Làm mượt Rotation Y (Xoay ngang)
+          currentRotationY += (targetRotationY - currentRotationY) * 0.1;
+          particles.rotation.y = currentRotationY; // Áp dụng vào trục Y
 
-          particles.rotation.z = currentRotationZ;
-
-          // Giảm tốc độ tự quay trục Y khi đang điều khiển
-          particles.rotation.y += 0.001;
+          // Reset trục Z về 0 từ từ để quả cầu đứng thẳng
+          particles.rotation.z += (0 - particles.rotation.z) * 0.05;
         } else {
-          // Khi không có tay:
-          // Hiệu ứng "Thở"
+          // Idle Mode
           const time = Date.now() * 0.001;
           const breathe = Math.sin(time) * 0.05;
 
-          // Scale về mặc định
           currentScale += (1 - currentScale) * 0.05;
           particles.scale.set(
             currentScale + breathe,
@@ -303,17 +287,12 @@
             currentScale + breathe
           );
 
-          // Tự động quay idle
+          // Tự xoay nhẹ
           particles.rotation.y += 0.002;
-          particles.rotation.z += 0.001;
-
-          // Đồng bộ biến rotation hiện tại để khi đưa tay vào không bị giật
-          currentRotationZ = particles.rotation.z;
+          currentRotationY = particles.rotation.y; // Sync lại
         }
 
-        // Áp dụng scale
         particles.scale.set(currentScale, currentScale, currentScale);
-
         renderer.render(scene, camera);
       }
 
