@@ -3,16 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Interactive Hand Particle System</title>
+    <title>Hand Controlled Particles - Rotate & Scale</title>
     <style>
       body {
         margin: 0;
         overflow: hidden;
-        background-color: #000;
+        background-color: #050505;
         font-family: "Segoe UI", sans-serif;
       }
 
-      /* Video ẩn để xử lý logic, hoặc hiện nhỏ để debug */
       #input_video {
         position: absolute;
         bottom: 10px;
@@ -21,44 +20,50 @@
         height: 120px;
         border-radius: 8px;
         border: 2px solid rgba(255, 255, 255, 0.2);
-        transform: scaleX(-1); /* Hiệu ứng gương */
+        transform: scaleX(-1);
         z-index: 2;
-        opacity: 0.7;
+        opacity: 0.6;
       }
 
-      /* Giao diện UI */
       #ui-container {
         position: absolute;
         top: 20px;
         left: 20px;
-        background: rgba(20, 20, 20, 0.8);
+        background: rgba(30, 30, 30, 0.85);
         padding: 20px;
         border-radius: 12px;
         backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.1);
         color: white;
         z-index: 10;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-        max-width: 250px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+        width: 220px;
       }
 
       h2 {
         margin: 0 0 10px 0;
         font-size: 16px;
         font-weight: 600;
-        letter-spacing: 0.5px;
+        color: #fff;
       }
       p {
-        font-size: 12px;
-        color: #aaa;
+        font-size: 13px;
+        color: #ccc;
         margin-bottom: 15px;
-        line-height: 1.4;
+        line-height: 1.5;
+      }
+      .instruction {
+        font-size: 12px;
+        color: #888;
+        margin-bottom: 10px;
+        font-style: italic;
       }
 
       .control-group {
         display: flex;
         align-items: center;
         justify-content: space-between;
+        margin-top: 10px;
       }
       input[type="color"] {
         -webkit-appearance: none;
@@ -70,13 +75,10 @@
         padding: 0;
         overflow: hidden;
       }
-      input[type="color"]::-webkit-color-swatch-wrapper {
-        padding: 0;
-      }
       input[type="color"]::-webkit-color-swatch {
         border: none;
         border-radius: 50%;
-        border: 2px solid white;
+        border: 2px solid #fff;
       }
 
       #loading {
@@ -84,16 +86,17 @@
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        color: white;
-        font-size: 20px;
+        color: #00ffff;
+        font-size: 18px;
         z-index: 20;
         pointer-events: none;
         transition: opacity 0.5s;
+        font-family: monospace;
+        letter-spacing: 2px;
       }
     </style>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-
     <script
       src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"
       crossorigin="anonymous"
@@ -108,13 +111,17 @@
     ></script>
   </head>
   <body>
-    <div id="loading">Đang khởi động Camera & AI... vui lòng đợi</div>
+    <div id="loading">ĐANG TẢI AI...</div>
 
     <div id="ui-container">
-      <h2>Interactive Particles</h2>
-      <p>Sử dụng 2 tay:<br />Gần nhau = Thu nhỏ<br />Xa nhau = Mở rộng</p>
+      <h2>Điều khiển Hạt 3D</h2>
+      <p>
+        ↔️ <b>Khoảng cách:</b> Phóng to/nhỏ<br />
+        🔄 <b>Nghiêng tay:</b> Xoay khối cầu
+      </p>
+      <div class="instruction">Hãy đưa cả 2 bàn tay lên camera</div>
       <div class="control-group">
-        <span>Màu hạt:</span>
+        <span>Màu sắc:</span>
         <input type="color" id="colorPicker" value="#00ffff" />
       </div>
     </div>
@@ -123,10 +130,9 @@
     <div id="canvas-container"></div>
 
     <script>
-      // --- CẤU HÌNH THREE.JS ---
+      // --- 1. SETUP THREE.JS ---
       const scene = new THREE.Scene();
-      // Thêm sương mù nhẹ để tạo chiều sâu
-      scene.fog = new THREE.FogExp2(0x000000, 0.002);
+      scene.fog = new THREE.FogExp2(0x050505, 0.002); // Sương mù đen cho nền tối
 
       const camera = new THREE.PerspectiveCamera(
         75,
@@ -134,26 +140,24 @@
         0.1,
         1000
       );
-      camera.position.z = 100;
+      camera.position.z = 90;
 
       const renderer = new THREE.WebGLRenderer({
         antialias: true,
         alpha: true,
       });
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Tối ưu hiệu năng
       document.body.appendChild(renderer.domElement);
 
-      // --- TẠO HỆ THỐNG HẠT (HÌNH CẦU) ---
-      const particleCount = 4000;
+      // --- 2. TẠO HỆ THỐNG HẠT ---
+      const particleCount = 5000; // Tăng số lượng hạt lên một chút
       const geometry = new THREE.BufferGeometry();
       const positions = [];
-      const originalPositions = []; // Lưu vị trí gốc để tính toán
-
       const radius = 30;
 
+      // Tạo hình cầu Fibonacci
       for (let i = 0; i < particleCount; i++) {
-        // Thuật toán fibonacci sphere để phân bố hạt đều trên mặt cầu
         const phi = Math.acos(-1 + (2 * i) / particleCount);
         const theta = Math.sqrt(particleCount * Math.PI) * phi;
 
@@ -162,7 +166,6 @@
         const z = radius * Math.cos(phi);
 
         positions.push(x, y, z);
-        originalPositions.push(x, y, z);
       }
 
       geometry.setAttribute(
@@ -172,21 +175,24 @@
 
       const material = new THREE.PointsMaterial({
         color: 0x00ffff,
-        size: 1.5,
+        size: 1.2,
         transparent: true,
-        opacity: 0.8,
+        opacity: 0.9,
         blending: THREE.AdditiveBlending,
+        depthWrite: false,
       });
 
       const particles = new THREE.Points(geometry, material);
       scene.add(particles);
 
-      // --- BIẾN TRẠNG THÁI ---
+      // --- 3. BIẾN LOGIC ---
       let targetScale = 1;
       let currentScale = 1;
+      let targetRotationZ = 0; // Góc xoay mục tiêu
+      let currentRotationZ = 0; // Góc xoay hiện tại (để làm mượt)
       let isHandDetected = false;
 
-      // --- XỬ LÝ MEDIAPIPE (NHẬN DIỆN TAY) ---
+      // --- 4. XỬ LÝ MEDIAPIPE ---
       const videoElement = document.getElementById("input_video");
 
       function onResults(results) {
@@ -198,94 +204,119 @@
         ) {
           isHandDetected = true;
 
-          // Lấy tọa độ ngón trỏ của 2 bàn tay
-          // Landmark 8 là đầu ngón trỏ
-          const hand1 = results.multiHandLandmarks[0][8];
-          const hand2 = results.multiHandLandmarks[1][8];
+          // Lấy mảng landmark
+          let landmarks = results.multiHandLandmarks;
 
-          // Tính khoảng cách Euclide giữa 2 ngón tay (tương đối theo khung hình)
+          // QUAN TRỌNG: Sắp xếp tay trái/phải dựa trên toạ độ X
+          // Tay trái (trên màn hình) sẽ có x nhỏ hơn tay phải
+          landmarks.sort((a, b) => a[8].x - b[8].x);
+
+          const leftHand = landmarks[0][8]; // Ngón trỏ tay trái (trên màn hình)
+          const rightHand = landmarks[1][8]; // Ngón trỏ tay phải (trên màn hình)
+
+          // --- XỬ LÝ SCALE (KHOẢNG CÁCH) ---
           const distance = Math.sqrt(
-            Math.pow(hand1.x - hand2.x, 2) + Math.pow(hand1.y - hand2.y, 2)
+            Math.pow(leftHand.x - rightHand.x, 2) +
+              Math.pow(leftHand.y - rightHand.y, 2)
           );
 
-          // Map khoảng cách (thường từ 0.05 đến 0.8) sang tỉ lệ scale (từ 0.5 đến 4)
-          // Điều chỉnh các số này để cảm giác tay thật hơn
-          const minHandDist = 0.1;
-          const maxHandDist = 0.6;
-          const minScale = 0.5; // Trạng thái thu gọn
-          const maxScale = 5.0; // Trạng thái mở rộng
+          // Map khoảng cách sang scale
+          const minScale = 0.5;
+          const maxScale = 4.5;
+          let normalizedDist = (distance - 0.1) / (0.6 - 0.1);
+          normalizedDist = Math.max(0, Math.min(1, normalizedDist));
+          targetScale = minScale + normalizedDist * (maxScale - minScale);
 
-          // Hàm map giá trị
-          let normalized =
-            (distance - minHandDist) / (maxHandDist - minHandDist);
-          normalized = Math.max(0, Math.min(1, normalized)); // Clamp 0-1
+          // --- XỬ LÝ ROTATION (GÓC NGHIÊNG) ---
+          // Tính vector chênh lệch giữa 2 tay
+          const dy = rightHand.y - leftHand.y;
+          const dx = rightHand.x - leftHand.x;
 
-          targetScale = minScale + normalized * (maxScale - minScale);
+          // Math.atan2 trả về góc tính bằng radian
+          // Lưu ý: Hệ toạ độ màn hình Y hướng xuống, nên ta đảo dấu hoặc điều chỉnh tuỳ cảm giác
+          // Ở đây ta muốn: Tay phải cao hơn -> Xoay trái (ngược chiều kim đồng hồ)
+          const angle = Math.atan2(dy, dx);
+
+          // Gán góc mục tiêu (nhân thêm hệ số nếu muốn xoay gắt hơn)
+          // -angle để đồng bộ cảm giác xoay vô lăng
+          targetRotationZ = -angle;
         } else {
           isHandDetected = false;
-          // Nếu không có 2 tay, từ từ trở về trạng thái bình thường (hoặc giữ nguyên, tuỳ ý)
+          // Nếu không có tay, reset từ từ hoặc giữ nguyên
           targetScale = 1;
+          // targetRotationZ = 0; // Bỏ comment nếu muốn tự cân bằng lại khi bỏ tay ra
         }
       }
 
       const hands = new Hands({
-        locateFile: (file) => {
-          return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-        },
+        locateFile: (file) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
       });
-
       hands.setOptions({
         maxNumHands: 2,
         modelComplexity: 1,
         minDetectionConfidence: 0.5,
         minTrackingConfidence: 0.5,
       });
-
       hands.onResults(onResults);
 
       const cameraUtils = new Camera(videoElement, {
-        onFrame: async () => {
-          await hands.send({ image: videoElement });
-        },
+        onFrame: async () => await hands.send({ image: videoElement }),
         width: 640,
         height: 480,
       });
       cameraUtils.start();
 
-      // --- UI CONTROL ---
-      const colorPicker = document.getElementById("colorPicker");
-      colorPicker.addEventListener("input", (e) => {
+      // --- UI ---
+      document.getElementById("colorPicker").addEventListener("input", (e) => {
         material.color.set(e.target.value);
       });
 
-      // --- ANIMATION LOOP ---
+      // --- 5. ANIMATION LOOP ---
       function animate() {
         requestAnimationFrame(animate);
 
-        // 1. Hiệu ứng quay tự động nhẹ nhàng
-        particles.rotation.y += 0.002;
-        particles.rotation.z += 0.001;
+        if (isHandDetected) {
+          // Khi có tay:
+          // 1. Lerp Scale (làm mượt thu phóng)
+          currentScale += (targetScale - currentScale) * 0.1;
 
-        // 2. Nội suy tuyến tính (Lerp) để chuyển động mượt mà giữa các mức zoom
-        currentScale += (targetScale - currentScale) * 0.1;
+          // 2. Lerp Rotation (làm mượt xoay)
+          // Công thức này giúp xoay mượt mà từ góc hiện tại sang góc mục tiêu
+          currentRotationZ += (targetRotationZ - currentRotationZ) * 0.1;
 
-        // 3. Cập nhật vị trí hạt dựa trên scale
-        // Thay vì dùng particles.scale.set (chỉ phóng to cả cụm),
-        // ta tính toán lại vị trí để có thể thêm hiệu ứng nhiễu (noise) nếu muốn sau này.
-        // Ở đây để tối ưu hiệu năng, ta dùng scale của Mesh
-        particles.scale.set(currentScale, currentScale, currentScale);
+          particles.rotation.z = currentRotationZ;
 
-        // Hiệu ứng "Thở" nhẹ khi không có tay
-        if (!isHandDetected) {
+          // Giảm tốc độ tự quay trục Y khi đang điều khiển
+          particles.rotation.y += 0.001;
+        } else {
+          // Khi không có tay:
+          // Hiệu ứng "Thở"
           const time = Date.now() * 0.001;
-          const breathe = Math.sin(time) * 0.1;
-          particles.scale.set(1 + breathe, 1 + breathe, 1 + breathe);
+          const breathe = Math.sin(time) * 0.05;
+
+          // Scale về mặc định
+          currentScale += (1 - currentScale) * 0.05;
+          particles.scale.set(
+            currentScale + breathe,
+            currentScale + breathe,
+            currentScale + breathe
+          );
+
+          // Tự động quay idle
+          particles.rotation.y += 0.002;
+          particles.rotation.z += 0.001;
+
+          // Đồng bộ biến rotation hiện tại để khi đưa tay vào không bị giật
+          currentRotationZ = particles.rotation.z;
         }
+
+        // Áp dụng scale
+        particles.scale.set(currentScale, currentScale, currentScale);
 
         renderer.render(scene, camera);
       }
 
-      // --- RESIZE HANDLER ---
       window.addEventListener("resize", () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
