@@ -3,83 +3,79 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hand Controlled - Reversed Rotation</title>
+    <title>Gesture Recognition - 1, 2, I Love You</title>
     <style>
       body {
         margin: 0;
-        overflow: hidden;
-        background-color: #000;
-        font-family: "Segoe UI", sans-serif;
-      }
-
-      #input_video {
-        position: absolute;
-        bottom: 10px;
-        right: 10px;
-        width: 160px;
-        height: 120px;
-        border-radius: 8px;
-        border: 2px solid rgba(255, 255, 255, 0.2);
-        transform: scaleX(-1);
-        z-index: 2;
-        opacity: 0.6;
-      }
-
-      #ui-container {
-        position: absolute;
-        top: 20px;
-        left: 20px;
-        background: rgba(20, 20, 20, 0.9);
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        background-color: #1a1a1a;
+        font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
         color: white;
-        z-index: 10;
-        width: 220px;
-      }
-
-      h2 {
-        margin: 0 0 10px 0;
-        font-size: 16px;
-        font-weight: 600;
-        color: #fff;
-      }
-      p {
-        font-size: 13px;
-        color: #bbb;
-        margin-bottom: 15px;
-        line-height: 1.5;
-      }
-      .instruction {
-        font-size: 12px;
-        color: #00ff88;
-        margin-bottom: 10px;
-        font-style: italic;
-      }
-
-      input[type="color"] {
-        -webkit-appearance: none;
-        border: none;
-        width: 100%;
-        height: 30px;
-        border-radius: 4px;
-        cursor: pointer;
-        padding: 0;
+        overflow: hidden;
       }
 
       #loading {
         position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        color: #00ff88;
+        top: 20px;
         font-size: 18px;
+        color: #00ffff;
         z-index: 20;
-        font-family: monospace;
+      }
+
+      /* Container chính cho video và canvas */
+      .video-container {
+        position: relative;
+        width: 640px;
+        height: 480px;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        border: 2px solid rgba(255, 255, 255, 0.1);
+      }
+
+      /* Video ẩn, chỉ dùng để lấy dữ liệu */
+      #input_video {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transform: scaleX(-1); /* Lật ngược video để giống gương */
+        z-index: 1;
+        opacity: 0.5; /* Làm mờ video gốc đi một chút */
+      }
+
+      /* Canvas để vẽ các điểm khớp tay lên trên video */
+      #output_canvas {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        z-index: 2;
+        transform: scaleX(-1);
+      }
+
+      /* Khu vực hiển thị kết quả to đùng */
+      #result-display {
+        margin-top: 30px;
+        font-size: 80px;
+        font-weight: 800;
+        text-align: center;
+        min-height: 120px; /* Giữ chỗ để không bị nhảy layout */
+        text-shadow: 0 4px 10px rgba(0, 0, 0, 0.7);
+        transition: all 0.3s ease;
+      }
+
+      .instruction {
+        margin-top: 10px;
+        font-size: 14px;
+        color: #aaa;
+        font-style: italic;
       }
     </style>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script
       src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"
       crossorigin="anonymous"
@@ -89,199 +85,155 @@
       crossorigin="anonymous"
     ></script>
     <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
       src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"
       crossorigin="anonymous"
     ></script>
   </head>
   <body>
-    <div id="loading">ĐANG CẬP NHẬT CHIỀU XOAY...</div>
+    <div id="loading">Đang khởi động AI, vui lòng đợi...</div>
 
-    <div id="ui-container">
-      <h2>Điều khiển Hạt 3D</h2>
-      <p>
-        ↔️ <b>Khoảng cách:</b> Phóng to/nhỏ<br />
-        🔄 <b>Nghiêng tay:</b> Xoay theo chiều tay
-      </p>
-      <div class="instruction">Đã đảo ngược chiều xoay</div>
-      <div style="margin-top: 10px">
-        <span style="font-size: 12px">Màu hạt:</span>
-        <input type="color" id="colorPicker" value="#00ff88" />
-      </div>
+    <div class="video-container">
+      <video id="input_video"></video>
+      <canvas id="output_canvas" width="640" height="480"></canvas>
     </div>
 
-    <video id="input_video"></video>
-    <div id="canvas-container"></div>
+    <div id="result-display">---</div>
+    <p class="instruction">
+      Giơ 1 ngón (trỏ), 2 ngón (V-sign), hoặc ký hiệu "I Love You"🤟
+    </p>
 
     <script>
-      // --- 1. SETUP THREE.JS ---
-      const scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x000000, 0.002);
-
-      const camera = new THREE.PerspectiveCamera(
-        75,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        1000
-      );
-      camera.position.z = 90;
-
-      const renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: true,
-      });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      document.body.appendChild(renderer.domElement);
-
-      // --- 2. TẠO HỆ THỐNG HẠT ---
-      const particleCount = 6000;
-      const geometry = new THREE.BufferGeometry();
-      const positions = [];
-      const radius = 35;
-
-      for (let i = 0; i < particleCount; i++) {
-        const phi = Math.acos(-1 + (2 * i) / particleCount);
-        const theta = Math.sqrt(particleCount * Math.PI) * phi;
-        const x = radius * Math.cos(theta) * Math.sin(phi);
-        const y = radius * Math.sin(theta) * Math.sin(phi);
-        const z = radius * Math.cos(phi);
-        positions.push(x, y, z);
-      }
-
-      geometry.setAttribute(
-        "position",
-        new THREE.Float32BufferAttribute(positions, 3)
-      );
-
-      const material = new THREE.PointsMaterial({
-        color: 0x00ff88,
-        size: 1.0,
-        transparent: true,
-        opacity: 0.9,
-        blending: THREE.AdditiveBlending,
-      });
-
-      const particles = new THREE.Points(geometry, material);
-      scene.add(particles);
-
-      // --- 3. BIẾN LOGIC ---
-      let targetScale = 1;
-      let currentScale = 1;
-
-      let targetRotationZ = 0;
-      let currentRotationZ = 0;
-
-      let isHandDetected = false;
-
-      // --- 4. XỬ LÝ MEDIAPIPE ---
       const videoElement = document.getElementById("input_video");
+      const canvasElement = document.getElementById("output_canvas");
+      const canvasCtx = canvasElement.getContext("2d");
+      const resultDisplay = document.getElementById("result-display");
+      const loadingDiv = document.getElementById("loading");
+
+      // Hàm kiểm tra một ngón tay có đang giơ lên hay không
+      // Sử dụng logic đơn giản: đầu ngón tay cao hơn khớp nối (trục Y trên màn hình nhỏ hơn)
+      function isFingerUp(
+        landmarks,
+        fingerTipIndex,
+        fingerPipIndex,
+        isThumb = false
+      ) {
+        // Với ngón cái, logic hơi khác một chút do cách nó di chuyển
+        // Đây là cách kiểm tra đơn giản, hiệu quả nhất khi giữ tay thẳng đứng
+        if (isThumb) {
+          // So sánh đầu ngón cái (4) với khớp gốc ngón trỏ (5) theo trục X để xem nó có mở ra không
+          // Cần điều chỉnh tùy tay trái phải, nhưng check Y đơn giản này tạm ổn cho tư thế đứng
+          return landmarks[fingerTipIndex].y < landmarks[fingerPipIndex].y;
+        }
+        // Các ngón còn lại: đầu ngón (tip) phải cao hơn khớp giữa (pip)
+        return landmarks[fingerTipIndex].y < landmarks[fingerPipIndex].y;
+      }
 
       function onResults(results) {
-        document.getElementById("loading").style.opacity = 0;
+        // Ẩn loading khi có kết quả đầu tiên
+        loadingDiv.style.display = "none";
 
+        // Xóa canvas để vẽ frame mới
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+        // Nếu phát hiện có tay
         if (
           results.multiHandLandmarks &&
-          results.multiHandLandmarks.length === 2
+          results.multiHandLandmarks.length > 0
         ) {
-          isHandDetected = true;
+          // Chỉ lấy bàn tay đầu tiên phát hiện được để xử lý cho đơn giản
+          const landmarks = results.multiHandLandmarks[0];
 
-          let landmarks = results.multiHandLandmarks;
-          landmarks.sort((a, b) => a[8].x - b[8].x);
+          // Vẽ các khớp tay lên canvas để dễ theo dõi
+          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {
+            color: "#00ff00",
+            lineWidth: 3,
+          });
+          drawLandmarks(canvasCtx, landmarks, {
+            color: "#ff0000",
+            lineWidth: 1,
+            radius: 3,
+          });
 
-          const leftHand = landmarks[0][8];
-          const rightHand = landmarks[1][8];
+          // --- LOGIC NHẬN DIỆN CỬ CHỈ ---
 
-          // --- SCALE ---
-          const distance = Math.sqrt(
-            Math.pow(leftHand.x - rightHand.x, 2) +
-              Math.pow(leftHand.y - rightHand.y, 2)
-          );
+          // Các chỉ số landmark đầu ngón tay: 4 (Cái), 8 (Trỏ), 12 (Giữa), 16 (Áp út), 20 (Út)
+          // Các chỉ số landmark khớp dưới nó để so sánh: 3, 6, 10, 14, 18
 
-          const minScale = 0.5;
-          const maxScale = 4.5;
-          let normalizedDist = (distance - 0.1) / (0.6 - 0.1);
-          normalizedDist = Math.max(0, Math.min(1, normalizedDist));
-          targetScale = minScale + normalizedDist * (maxScale - minScale);
+          // 1. Xác định trạng thái từng ngón (Lên/Xuống)
+          const thumbUp = isFingerUp(landmarks, 4, 3, true); // Ngón Cái
+          const indexUp = isFingerUp(landmarks, 8, 6); // Ngón Trỏ
+          const middleUp = isFingerUp(landmarks, 12, 10); // Ngón Giữa
+          const ringUp = isFingerUp(landmarks, 16, 14); // Ngón Áp Út
+          const pinkyUp = isFingerUp(landmarks, 20, 18); // Ngón Út
 
-          // --- ROTATION (ĐÃ SỬA LẠI CHIỀU) ---
-          const dy = rightHand.y - leftHand.y;
-          const dx = rightHand.x - leftHand.x;
-          const angle = Math.atan2(dy, dx);
+          let message = "";
+          let color = "white";
 
-          // CŨ: targetRotationZ = -angle;
-          // MỚI: Bỏ dấu trừ để đảo chiều xoay
-          targetRotationZ = angle;
+          // 2. Kiểm tra các tổ hợp (Ưu tiên các cử chỉ phức tạp trước)
+
+          // --- Cử chỉ "I LOVE YOU" (🤟) ---
+          // Yêu cầu: Cái LÊN, Trỏ LÊN, Út LÊN. (Giữa và Áp út GẬP)
+          if (thumbUp && indexUp && pinkyUp && !middleUp && !ringUp) {
+            message = "🤟 I LOVE YOU 🤟";
+            color = "#ff69b4"; // Màu hồng
+          }
+          // --- Cử chỉ "SỐ 2" (V-sign ✌️) ---
+          // Yêu cầu: Trỏ LÊN, Giữa LÊN. (Các ngón khác GẬP)
+          // Cần check chặt chẽ để tránh nhầm với I Love You
+          else if (indexUp && middleUp && !ringUp && !pinkyUp && !thumbUp) {
+            message = "2";
+            color = "#00ffff"; // Màu xanh cyan
+          }
+          // --- Cử chỉ "SỐ 1" (☝️) ---
+          // Yêu cầu: Chỉ ngón Trỏ LÊN.
+          else if (indexUp && !middleUp && !ringUp && !pinkyUp && !thumbUp) {
+            message = "1";
+            color = "#ffff00"; // Màu vàng
+          } else {
+            // Không khớp cử chỉ nào đã định nghĩa
+            message = "---";
+          }
+
+          // Hiển thị kết quả
+          if (message !== "---") {
+            resultDisplay.innerText = message;
+            resultDisplay.style.color = color;
+          }
         } else {
-          isHandDetected = false;
-          targetScale = 1;
+          // Không thấy tay
+          // resultDisplay.innerText = "🔍 Đang tìm tay...";
+          resultDisplay.style.color = "#aaa";
         }
+        canvasCtx.restore();
       }
 
+      // Cấu hình MediaPipe Hands
       const hands = new Hands({
         locateFile: (file) =>
           `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
       });
       hands.setOptions({
-        maxNumHands: 2,
+        maxNumHands: 1, // Chỉ cần phát hiện 1 tay cho ứng dụng này
         modelComplexity: 1,
-        minDetectionConfidence: 0.5,
+        minDetectionConfidence: 0.6, // Tăng độ tin cậy lên chút cho chính xác
         minTrackingConfidence: 0.5,
       });
       hands.onResults(onResults);
 
-      const cameraUtils = new Camera(videoElement, {
-        onFrame: async () => await hands.send({ image: videoElement }),
+      // Khởi động Camera
+      const camera = new Camera(videoElement, {
+        onFrame: async () => {
+          await hands.send({ image: videoElement });
+        },
         width: 640,
         height: 480,
       });
-      cameraUtils.start();
-
-      document.getElementById("colorPicker").addEventListener("input", (e) => {
-        material.color.set(e.target.value);
-      });
-
-      // --- 5. ANIMATION LOOP ---
-      function animate() {
-        requestAnimationFrame(animate);
-
-        if (isHandDetected) {
-          currentScale += (targetScale - currentScale) * 0.1;
-
-          // Xoay mượt
-          currentRotationZ += (targetRotationZ - currentRotationZ) * 0.1;
-          particles.rotation.z = currentRotationZ;
-
-          // Trả trục Y về 0
-          particles.rotation.y += (0 - particles.rotation.y) * 0.05;
-        } else {
-          // Idle Mode
-          const time = Date.now() * 0.001;
-          const breathe = Math.sin(time) * 0.05;
-
-          currentScale += (1 - currentScale) * 0.05;
-          particles.scale.set(
-            currentScale + breathe,
-            currentScale + breathe,
-            currentScale + breathe
-          );
-
-          particles.rotation.y += 0.002;
-          particles.rotation.z += 0.001;
-
-          currentRotationZ = particles.rotation.z;
-        }
-
-        particles.scale.set(currentScale, currentScale, currentScale);
-        renderer.render(scene, camera);
-      }
-
-      window.addEventListener("resize", () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
-
-      animate();
+      camera.start();
     </script>
   </body>
 </html>
