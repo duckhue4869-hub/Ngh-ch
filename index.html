@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hand Controlled - Clockwise Rotation</title>
+    <title>Hand Controlled - Reversed Rotation</title>
     <style>
       body {
         margin: 0;
@@ -52,7 +52,7 @@
       }
       .instruction {
         font-size: 12px;
-        color: #00ffff;
+        color: #00ff88;
         margin-bottom: 10px;
         font-style: italic;
       }
@@ -72,7 +72,7 @@
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        color: #00ffff;
+        color: #00ff88;
         font-size: 18px;
         z-index: 20;
         font-family: monospace;
@@ -94,18 +94,18 @@
     ></script>
   </head>
   <body>
-    <div id="loading">ĐANG KHỞI TẠO HỆ THỐNG...</div>
+    <div id="loading">ĐANG CẬP NHẬT CHIỀU XOAY...</div>
 
     <div id="ui-container">
-      <h2>Chế độ Kim Đồng Hồ</h2>
+      <h2>Điều khiển Hạt 3D</h2>
       <p>
         ↔️ <b>Khoảng cách:</b> Phóng to/nhỏ<br />
-        🔄 <b>Nghiêng tay:</b> Xoay Cùng/Ngược chiều kim đồng hồ
+        🔄 <b>Nghiêng tay:</b> Xoay theo chiều tay
       </p>
-      <div class="instruction">Đưa 2 tay lên để điều khiển</div>
+      <div class="instruction">Đã đảo ngược chiều xoay</div>
       <div style="margin-top: 10px">
         <span style="font-size: 12px">Màu hạt:</span>
-        <input type="color" id="colorPicker" value="#ff0055" />
+        <input type="color" id="colorPicker" value="#00ff88" />
       </div>
     </div>
 
@@ -115,7 +115,6 @@
     <script>
       // --- 1. SETUP THREE.JS ---
       const scene = new THREE.Scene();
-      // Giảm sương mù để nền đen sâu hơn
       scene.fog = new THREE.FogExp2(0x000000, 0.002);
 
       const camera = new THREE.PerspectiveCamera(
@@ -155,7 +154,7 @@
       );
 
       const material = new THREE.PointsMaterial({
-        color: 0xff0055, // Màu mặc định mới
+        color: 0x00ff88,
         size: 1.0,
         transparent: true,
         opacity: 0.9,
@@ -169,7 +168,7 @@
       let targetScale = 1;
       let currentScale = 1;
 
-      let targetRotationZ = 0; // Quay lại trục Z (Kim đồng hồ)
+      let targetRotationZ = 0;
       let currentRotationZ = 0;
 
       let isHandDetected = false;
@@ -187,7 +186,6 @@
           isHandDetected = true;
 
           let landmarks = results.multiHandLandmarks;
-          // Sắp xếp tay trái/phải theo trục X
           landmarks.sort((a, b) => a[8].x - b[8].x);
 
           const leftHand = landmarks[0][8];
@@ -205,20 +203,14 @@
           normalizedDist = Math.max(0, Math.min(1, normalizedDist));
           targetScale = minScale + normalizedDist * (maxScale - minScale);
 
-          // --- ROTATION (CLOCKWISE / Z-AXIS) ---
+          // --- ROTATION (ĐÃ SỬA LẠI CHIỀU) ---
           const dy = rightHand.y - leftHand.y;
           const dx = rightHand.x - leftHand.x;
-
-          // Tính góc nghiêng
           const angle = Math.atan2(dy, dx);
 
-          // Giải thích Logic:
-          // Trục Y màn hình hướng xuống.
-          // Nếu tay Phải thấp hơn tay Trái => dy > 0 => angle > 0.
-          // Trạng thái này giống nghiêng vô lăng sang phải (Chiều kim đồng hồ).
-          // Trong ThreeJS: Rotation Z dương là Ngược chiều KĐH, Âm là Cùng chiều KĐH.
-          // Vì vậy ta lấy -angle để: Nghiêng Phải -> angle dương -> Z âm -> Quay chiều KĐH.
-          targetRotationZ = -angle;
+          // CŨ: targetRotationZ = -angle;
+          // MỚI: Bỏ dấu trừ để đảo chiều xoay
+          targetRotationZ = angle;
         } else {
           isHandDetected = false;
           targetScale = 1;
@@ -253,15 +245,13 @@
         requestAnimationFrame(animate);
 
         if (isHandDetected) {
-          // Lerp Scale
           currentScale += (targetScale - currentScale) * 0.1;
 
-          // Lerp Rotation Z (Kim đồng hồ)
-          // Dùng công thức nội suy góc ngắn nhất để xoay mượt mà
+          // Xoay mượt
           currentRotationZ += (targetRotationZ - currentRotationZ) * 0.1;
           particles.rotation.z = currentRotationZ;
 
-          // Reset trục Y về 0 (để không còn xoay ngang)
+          // Trả trục Y về 0
           particles.rotation.y += (0 - particles.rotation.y) * 0.05;
         } else {
           // Idle Mode
@@ -275,11 +265,9 @@
             currentScale + breathe
           );
 
-          // Tự xoay nhẹ
           particles.rotation.y += 0.002;
           particles.rotation.z += 0.001;
 
-          // Sync vị trí để không giật khi đưa tay vào lại
           currentRotationZ = particles.rotation.z;
         }
 
