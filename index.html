@@ -3,76 +3,128 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gesture Recognition - 1, 2, I Love You</title>
+    <title>Romantic Gesture Control</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Pacifico&family=Quicksand:wght@500&display=swap"
+      rel="stylesheet"
+    />
     <style>
       body {
         margin: 0;
-        background-color: #1a1a1a;
-        font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        overflow: hidden;
+        background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+        font-family: "Pacifico", cursive;
         display: flex;
-        flex-direction: column;
-        align-items: center;
         justify-content: center;
+        align-items: center;
         height: 100vh;
-        color: white;
-        overflow: hidden;
       }
 
-      #loading {
-        position: absolute;
-        top: 20px;
-        font-size: 18px;
-        color: #00ffff;
-        z-index: 20;
-      }
-
-      /* Container chính cho video và canvas */
-      .video-container {
+      /* Container chính */
+      #container {
         position: relative;
-        width: 640px;
-        height: 480px;
-        border-radius: 16px;
-        overflow: hidden;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-        border: 2px solid rgba(255, 255, 255, 0.1);
+        width: 100vw;
+        height: 100vh;
+        background: #000;
       }
 
-      /* Video ẩn, chỉ dùng để lấy dữ liệu */
+      /* Video nền (làm mờ và tông hồng) */
       #input_video {
         position: absolute;
         width: 100%;
         height: 100%;
         object-fit: cover;
-        transform: scaleX(-1); /* Lật ngược video để giống gương */
-        z-index: 1;
-        opacity: 0.5; /* Làm mờ video gốc đi một chút */
+        transform: scaleX(-1);
+        opacity: 0.6; /* Làm mờ video thực tế để nền ảo hiện lên */
+        filter: sepia(0.3) hue-rotate(300deg) saturate(1.5); /* Bộ lọc màu hồng mộng mơ */
       }
 
-      /* Canvas để vẽ các điểm khớp tay lên trên video */
-      #output_canvas {
+      /* Lớp phủ màu hồng gradient */
+      #overlay-gradient {
         position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(
+          circle,
+          rgba(255, 192, 203, 0.1) 0%,
+          rgba(255, 105, 180, 0.4) 100%
+        );
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      /* Canvas vẽ hiệu ứng tim bay */
+      #particle_canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
         width: 100%;
         height: 100%;
         z-index: 2;
-        transform: scaleX(-1);
+        pointer-events: none;
       }
 
-      /* Khu vực hiển thị kết quả to đùng */
-      #result-display {
-        margin-top: 30px;
-        font-size: 80px;
-        font-weight: 800;
+      /* Khu vực hiển thị chữ */
+      #message-box {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 3;
         text-align: center;
-        min-height: 120px; /* Giữ chỗ để không bị nhảy layout */
-        text-shadow: 0 4px 10px rgba(0, 0, 0, 0.7);
-        transition: all 0.3s ease;
+        width: 100%;
+        pointer-events: none;
       }
 
-      .instruction {
-        margin-top: 10px;
-        font-size: 14px;
-        color: #aaa;
-        font-style: italic;
+      .main-text {
+        font-size: 6rem;
+        color: #fff;
+        text-shadow: 0 0 20px #ff0055, 0 0 40px #ff0055;
+        transition: all 0.5s ease;
+        opacity: 0;
+        transform: scale(0.8);
+      }
+
+      .main-text.visible {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      /* Hiệu ứng nhịp tim cho chữ I Love You */
+      .heartbeat {
+        animation: heartbeat 1.2s infinite;
+      }
+
+      @keyframes heartbeat {
+        0% {
+          transform: scale(1);
+        }
+        14% {
+          transform: scale(1.1);
+        }
+        28% {
+          transform: scale(1);
+        }
+        42% {
+          transform: scale(1.1);
+        }
+        70% {
+          transform: scale(1);
+        }
+      }
+
+      #loading {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        color: #ff69b4;
+        font-family: "Quicksand", sans-serif;
+        z-index: 10;
+        background: rgba(255, 255, 255, 0.8);
+        padding: 10px 20px;
+        border-radius: 20px;
       }
     </style>
 
@@ -85,153 +137,174 @@
       crossorigin="anonymous"
     ></script>
     <script
-      src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
-      crossorigin="anonymous"
-    ></script>
-    <script
       src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"
       crossorigin="anonymous"
     ></script>
   </head>
   <body>
-    <div id="loading">Đang khởi động AI, vui lòng đợi...</div>
+    <div id="loading">Dang khoi tao phep mau... ✨</div>
 
-    <div class="video-container">
+    <div id="container">
       <video id="input_video"></video>
-      <canvas id="output_canvas" width="640" height="480"></canvas>
-    </div>
+      <div id="overlay-gradient"></div>
+      <canvas id="particle_canvas"></canvas>
 
-    <div id="result-display">---</div>
-    <p class="instruction">
-      Giơ 1 ngón (trỏ), 2 ngón (V-sign), hoặc ký hiệu "I Love You"🤟
-    </p>
+      <div id="message-box">
+        <div id="text-display" class="main-text"></div>
+      </div>
+    </div>
 
     <script>
       const videoElement = document.getElementById("input_video");
-      const canvasElement = document.getElementById("output_canvas");
-      const canvasCtx = canvasElement.getContext("2d");
-      const resultDisplay = document.getElementById("result-display");
+      const particleCanvas = document.getElementById("particle_canvas");
+      const pCtx = particleCanvas.getContext("2d");
+      const textDisplay = document.getElementById("text-display");
       const loadingDiv = document.getElementById("loading");
 
-      // Hàm kiểm tra một ngón tay có đang giơ lên hay không
-      // Sử dụng logic đơn giản: đầu ngón tay cao hơn khớp nối (trục Y trên màn hình nhỏ hơn)
-      function isFingerUp(
-        landmarks,
-        fingerTipIndex,
-        fingerPipIndex,
-        isThumb = false
-      ) {
-        // Với ngón cái, logic hơi khác một chút do cách nó di chuyển
-        // Đây là cách kiểm tra đơn giản, hiệu quả nhất khi giữ tay thẳng đứng
-        if (isThumb) {
-          // So sánh đầu ngón cái (4) với khớp gốc ngón trỏ (5) theo trục X để xem nó có mở ra không
-          // Cần điều chỉnh tùy tay trái phải, nhưng check Y đơn giản này tạm ổn cho tư thế đứng
-          return landmarks[fingerTipIndex].y < landmarks[fingerPipIndex].y;
+      // Resize canvas theo màn hình
+      function resizeCanvas() {
+        particleCanvas.width = window.innerWidth;
+        particleCanvas.height = window.innerHeight;
+      }
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+
+      // --- HỆ THỐNG HẠT (TIM BAY) ---
+      let particles = [];
+      const hearts = ["❤️", "💖", "💕", "🥰", "💗"];
+
+      class Particle {
+        constructor() {
+          this.x = Math.random() * particleCanvas.width;
+          this.y = particleCanvas.height + 20; // Bắt đầu từ dưới màn hình
+          this.size = Math.random() * 30 + 15;
+          this.speedY = Math.random() * 3 + 2; // Tốc độ bay lên
+          this.speedX = Math.random() * 2 - 1; // Lắc lư trái phải
+          this.opacity = 1;
+          this.symbol = hearts[Math.floor(Math.random() * hearts.length)];
         }
-        // Các ngón còn lại: đầu ngón (tip) phải cao hơn khớp giữa (pip)
-        return landmarks[fingerTipIndex].y < landmarks[fingerPipIndex].y;
+        update() {
+          this.y -= this.speedY;
+          this.x += Math.sin(this.y * 0.01) * 2; // Hiệu ứng lắc lư
+          this.opacity -= 0.005; // Mờ dần
+        }
+        draw() {
+          pCtx.globalAlpha = this.opacity;
+          pCtx.font = `${this.size}px Arial`;
+          pCtx.fillText(this.symbol, this.x, this.y);
+          pCtx.globalAlpha = 1;
+        }
       }
 
+      // --- LOGIC NHẬN DIỆN TAY ---
+      function isFingerUp(landmarks, tipIdx, pipIdx, isThumb = false) {
+        return isThumb
+          ? landmarks[tipIdx].x < landmarks[pipIdx].x
+          : landmarks[tipIdx].y < landmarks[pipIdx].y;
+      }
+
+      // Điều chỉnh logic ngón cái cho tay trái/phải trên màn hình gương
+      function isThumbUp(landmarks, handedness) {
+        // Logic đơn giản: Check độ mở của ngón cái so với khớp
+        const tip = landmarks[4];
+        const ip = landmarks[3];
+        // Khoảng cách Euclide để xem ngón cái có đang duỗi ra không
+        const dist = Math.sqrt(
+          Math.pow(tip.x - landmarks[5].x, 2) +
+            Math.pow(tip.y - landmarks[5].y, 2)
+        );
+        return dist > 0.05; // Ngưỡng duỗi ngón cái
+      }
+
+      let isLoveGesture = false;
+
       function onResults(results) {
-        // Ẩn loading khi có kết quả đầu tiên
         loadingDiv.style.display = "none";
+        pCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
 
-        // Xóa canvas để vẽ frame mới
-        canvasCtx.save();
-        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        let gestureFound = false;
 
-        // Nếu phát hiện có tay
         if (
           results.multiHandLandmarks &&
           results.multiHandLandmarks.length > 0
         ) {
-          // Chỉ lấy bàn tay đầu tiên phát hiện được để xử lý cho đơn giản
           const landmarks = results.multiHandLandmarks[0];
 
-          // Vẽ các khớp tay lên canvas để dễ theo dõi
-          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {
-            color: "#00ff00",
-            lineWidth: 3,
-          });
-          drawLandmarks(canvasCtx, landmarks, {
-            color: "#ff0000",
-            lineWidth: 1,
-            radius: 3,
-          });
+          // Check trạng thái ngón
+          const indexUp = landmarks[8].y < landmarks[6].y;
+          const middleUp = landmarks[12].y < landmarks[10].y;
+          const ringUp = landmarks[16].y < landmarks[14].y;
+          const pinkyUp = landmarks[20].y < landmarks[18].y;
 
-          // --- LOGIC NHẬN DIỆN CỬ CHỈ ---
+          // Logic ngón cái (tương đối)
+          const thumbUp = Math.abs(landmarks[4].x - landmarks[2].x) > 0.05;
 
-          // Các chỉ số landmark đầu ngón tay: 4 (Cái), 8 (Trỏ), 12 (Giữa), 16 (Áp út), 20 (Út)
-          // Các chỉ số landmark khớp dưới nó để so sánh: 3, 6, 10, 14, 18
+          // --- LOGIC CỬ CHỈ ---
 
-          // 1. Xác định trạng thái từng ngón (Lên/Xuống)
-          const thumbUp = isFingerUp(landmarks, 4, 3, true); // Ngón Cái
-          const indexUp = isFingerUp(landmarks, 8, 6); // Ngón Trỏ
-          const middleUp = isFingerUp(landmarks, 12, 10); // Ngón Giữa
-          const ringUp = isFingerUp(landmarks, 16, 14); // Ngón Áp Út
-          const pinkyUp = isFingerUp(landmarks, 20, 18); // Ngón Út
-
-          let message = "";
-          let color = "white";
-
-          // 2. Kiểm tra các tổ hợp (Ưu tiên các cử chỉ phức tạp trước)
-
-          // --- Cử chỉ "I LOVE YOU" (🤟) ---
-          // Yêu cầu: Cái LÊN, Trỏ LÊN, Út LÊN. (Giữa và Áp út GẬP)
+          // 1. I LOVE YOU (🤟: Cái, Trỏ, Út mở; Giữa, Áp út gập)
           if (thumbUp && indexUp && pinkyUp && !middleUp && !ringUp) {
-            message = "🤟 I LOVE YOU 🤟";
-            color = "#ff69b4"; // Màu hồng
+            textDisplay.innerText = "I ❤️ You";
+            textDisplay.className = "main-text visible heartbeat";
+            isLoveGesture = true;
+            gestureFound = true;
           }
-          // --- Cử chỉ "SỐ 2" (V-sign ✌️) ---
-          // Yêu cầu: Trỏ LÊN, Giữa LÊN. (Các ngón khác GẬP)
-          // Cần check chặt chẽ để tránh nhầm với I Love You
-          else if (indexUp && middleUp && !ringUp && !pinkyUp && !thumbUp) {
-            message = "2";
-            color = "#00ffff"; // Màu xanh cyan
+          // 2. SỐ 2 (✌️: Trỏ, Giữa mở)
+          else if (indexUp && middleUp && !ringUp && !pinkyUp) {
+            textDisplay.innerText = "Together 💕";
+            textDisplay.className = "main-text visible";
+            isLoveGesture = false; // Không mưa tim, chỉ hiện chữ
+            gestureFound = true;
           }
-          // --- Cử chỉ "SỐ 1" (☝️) ---
-          // Yêu cầu: Chỉ ngón Trỏ LÊN.
-          else if (indexUp && !middleUp && !ringUp && !pinkyUp && !thumbUp) {
-            message = "1";
-            color = "#ffff00"; // Màu vàng
-          } else {
-            // Không khớp cử chỉ nào đã định nghĩa
-            message = "---";
+          // 3. SỐ 1 (☝️: Trỏ mở)
+          else if (indexUp && !middleUp && !ringUp && !pinkyUp) {
+            textDisplay.innerText = "Only You 💖";
+            textDisplay.className = "main-text visible";
+            isLoveGesture = false;
+            gestureFound = true;
           }
-
-          // Hiển thị kết quả
-          if (message !== "---") {
-            resultDisplay.innerText = message;
-            resultDisplay.style.color = color;
-          }
-        } else {
-          // Không thấy tay
-          // resultDisplay.innerText = "🔍 Đang tìm tay...";
-          resultDisplay.style.color = "#aaa";
         }
-        canvasCtx.restore();
+
+        if (!gestureFound) {
+          textDisplay.classList.remove("visible");
+          isLoveGesture = false;
+        }
+
+        // --- XỬ LÝ HẠT (TIM BAY) ---
+        // Nếu đang I Love You -> Tạo thêm tim mới liên tục
+        if (isLoveGesture) {
+          for (let i = 0; i < 3; i++) particles.push(new Particle());
+        }
+
+        // Vẽ và cập nhật tim
+        for (let i = 0; i < particles.length; i++) {
+          particles[i].update();
+          particles[i].draw();
+          // Xóa hạt đã biến mất hoặc bay khỏi màn hình
+          if (particles[i].opacity <= 0 || particles[i].y < -50) {
+            particles.splice(i, 1);
+            i--;
+          }
+        }
       }
 
-      // Cấu hình MediaPipe Hands
       const hands = new Hands({
         locateFile: (file) =>
           `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
       });
       hands.setOptions({
-        maxNumHands: 1, // Chỉ cần phát hiện 1 tay cho ứng dụng này
+        maxNumHands: 1,
         modelComplexity: 1,
-        minDetectionConfidence: 0.6, // Tăng độ tin cậy lên chút cho chính xác
+        minDetectionConfidence: 0.6,
         minTrackingConfidence: 0.5,
       });
       hands.onResults(onResults);
 
-      // Khởi động Camera
       const camera = new Camera(videoElement, {
         onFrame: async () => {
           await hands.send({ image: videoElement });
         },
-        width: 640,
-        height: 480,
+        width: 1280,
+        height: 720,
       });
       camera.start();
     </script>
