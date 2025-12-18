@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hand Controlled Particles - Horizontal Rotation</title>
+    <title>Hand Controlled - Clockwise Rotation</title>
     <style>
       body {
         margin: 0;
         overflow: hidden;
-        background-color: #050505;
+        background-color: #000;
         font-family: "Segoe UI", sans-serif;
       }
 
@@ -29,14 +29,12 @@
         position: absolute;
         top: 20px;
         left: 20px;
-        background: rgba(30, 30, 30, 0.85);
+        background: rgba(20, 20, 20, 0.9);
         padding: 20px;
         border-radius: 12px;
-        backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.1);
         color: white;
         z-index: 10;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
         width: 220px;
       }
 
@@ -48,37 +46,25 @@
       }
       p {
         font-size: 13px;
-        color: #ccc;
+        color: #bbb;
         margin-bottom: 15px;
         line-height: 1.5;
       }
       .instruction {
         font-size: 12px;
-        color: #888;
+        color: #00ffff;
         margin-bottom: 10px;
         font-style: italic;
       }
 
-      .control-group {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-top: 10px;
-      }
       input[type="color"] {
         -webkit-appearance: none;
         border: none;
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
+        width: 100%;
+        height: 30px;
+        border-radius: 4px;
         cursor: pointer;
         padding: 0;
-        overflow: hidden;
-      }
-      input[type="color"]::-webkit-color-swatch {
-        border: none;
-        border-radius: 50%;
-        border: 2px solid #fff;
       }
 
       #loading {
@@ -89,10 +75,7 @@
         color: #00ffff;
         font-size: 18px;
         z-index: 20;
-        pointer-events: none;
-        transition: opacity 0.5s;
         font-family: monospace;
-        letter-spacing: 2px;
       }
     </style>
 
@@ -111,18 +94,18 @@
     ></script>
   </head>
   <body>
-    <div id="loading">ĐANG TẢI AI...</div>
+    <div id="loading">ĐANG KHỞI TẠO HỆ THỐNG...</div>
 
     <div id="ui-container">
-      <h2>Điều khiển Hạt 3D</h2>
+      <h2>Chế độ Kim Đồng Hồ</h2>
       <p>
         ↔️ <b>Khoảng cách:</b> Phóng to/nhỏ<br />
-        🔄 <b>Nghiêng tay:</b> Xoay ngang (Trái/Phải)
+        🔄 <b>Nghiêng tay:</b> Xoay Cùng/Ngược chiều kim đồng hồ
       </p>
-      <div class="instruction">Đưa 2 tay lên camera để bắt đầu</div>
-      <div class="control-group">
-        <span>Màu sắc:</span>
-        <input type="color" id="colorPicker" value="#00ffff" />
+      <div class="instruction">Đưa 2 tay lên để điều khiển</div>
+      <div style="margin-top: 10px">
+        <span style="font-size: 12px">Màu hạt:</span>
+        <input type="color" id="colorPicker" value="#ff0055" />
       </div>
     </div>
 
@@ -132,7 +115,8 @@
     <script>
       // --- 1. SETUP THREE.JS ---
       const scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x050505, 0.002);
+      // Giảm sương mù để nền đen sâu hơn
+      scene.fog = new THREE.FogExp2(0x000000, 0.002);
 
       const camera = new THREE.PerspectiveCamera(
         75,
@@ -151,10 +135,10 @@
       document.body.appendChild(renderer.domElement);
 
       // --- 2. TẠO HỆ THỐNG HẠT ---
-      const particleCount = 5000;
+      const particleCount = 6000;
       const geometry = new THREE.BufferGeometry();
       const positions = [];
-      const radius = 30;
+      const radius = 35;
 
       for (let i = 0; i < particleCount; i++) {
         const phi = Math.acos(-1 + (2 * i) / particleCount);
@@ -171,12 +155,11 @@
       );
 
       const material = new THREE.PointsMaterial({
-        color: 0x00ffff,
-        size: 1.2,
+        color: 0xff0055, // Màu mặc định mới
+        size: 1.0,
         transparent: true,
         opacity: 0.9,
         blending: THREE.AdditiveBlending,
-        depthWrite: false,
       });
 
       const particles = new THREE.Points(geometry, material);
@@ -186,8 +169,8 @@
       let targetScale = 1;
       let currentScale = 1;
 
-      let targetRotationY = 0; // Đổi thành Y để xoay ngang
-      let currentRotationY = 0;
+      let targetRotationZ = 0; // Quay lại trục Z (Kim đồng hồ)
+      let currentRotationZ = 0;
 
       let isHandDetected = false;
 
@@ -204,13 +187,13 @@
           isHandDetected = true;
 
           let landmarks = results.multiHandLandmarks;
-          // Sắp xếp tay trái/phải theo trục X để tính toán chuẩn
+          // Sắp xếp tay trái/phải theo trục X
           landmarks.sort((a, b) => a[8].x - b[8].x);
 
           const leftHand = landmarks[0][8];
           const rightHand = landmarks[1][8];
 
-          // --- XỬ LÝ SCALE ---
+          // --- SCALE ---
           const distance = Math.sqrt(
             Math.pow(leftHand.x - rightHand.x, 2) +
               Math.pow(leftHand.y - rightHand.y, 2)
@@ -222,16 +205,20 @@
           normalizedDist = Math.max(0, Math.min(1, normalizedDist));
           targetScale = minScale + normalizedDist * (maxScale - minScale);
 
-          // --- XỬ LÝ ROTATION (MỚI: XOAY TRỤC Y) ---
+          // --- ROTATION (CLOCKWISE / Z-AXIS) ---
           const dy = rightHand.y - leftHand.y;
           const dx = rightHand.x - leftHand.x;
 
-          // Tính góc nghiêng của tay
+          // Tính góc nghiêng
           const angle = Math.atan2(dy, dx);
 
-          // Gán vào trục Y thay vì trục Z
-          // Nhân thêm hệ số (2.5) để xoay nhanh hơn, cảm giác nhạy hơn
-          targetRotationY = angle * 2.5;
+          // Giải thích Logic:
+          // Trục Y màn hình hướng xuống.
+          // Nếu tay Phải thấp hơn tay Trái => dy > 0 => angle > 0.
+          // Trạng thái này giống nghiêng vô lăng sang phải (Chiều kim đồng hồ).
+          // Trong ThreeJS: Rotation Z dương là Ngược chiều KĐH, Âm là Cùng chiều KĐH.
+          // Vì vậy ta lấy -angle để: Nghiêng Phải -> angle dương -> Z âm -> Quay chiều KĐH.
+          targetRotationZ = -angle;
         } else {
           isHandDetected = false;
           targetScale = 1;
@@ -266,15 +253,16 @@
         requestAnimationFrame(animate);
 
         if (isHandDetected) {
-          // Làm mượt Scale
+          // Lerp Scale
           currentScale += (targetScale - currentScale) * 0.1;
 
-          // Làm mượt Rotation Y (Xoay ngang)
-          currentRotationY += (targetRotationY - currentRotationY) * 0.1;
-          particles.rotation.y = currentRotationY; // Áp dụng vào trục Y
+          // Lerp Rotation Z (Kim đồng hồ)
+          // Dùng công thức nội suy góc ngắn nhất để xoay mượt mà
+          currentRotationZ += (targetRotationZ - currentRotationZ) * 0.1;
+          particles.rotation.z = currentRotationZ;
 
-          // Reset trục Z về 0 từ từ để quả cầu đứng thẳng
-          particles.rotation.z += (0 - particles.rotation.z) * 0.05;
+          // Reset trục Y về 0 (để không còn xoay ngang)
+          particles.rotation.y += (0 - particles.rotation.y) * 0.05;
         } else {
           // Idle Mode
           const time = Date.now() * 0.001;
@@ -289,7 +277,10 @@
 
           // Tự xoay nhẹ
           particles.rotation.y += 0.002;
-          currentRotationY = particles.rotation.y; // Sync lại
+          particles.rotation.z += 0.001;
+
+          // Sync vị trí để không giật khi đưa tay vào lại
+          currentRotationZ = particles.rotation.z;
         }
 
         particles.scale.set(currentScale, currentScale, currentScale);
